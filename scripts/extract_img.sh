@@ -67,14 +67,6 @@ append_context() {
 
     grep -qxF "$line" "$FILE_CONTEXTS" 2>/dev/null || \
         echo "$line" >> "$FILE_CONTEXTS"
-
-    if [ "$isdir" = "1" ]; then
-
-        line="/${esc}(/.*)? ${ctx}"
-
-        grep -qxF "$line" "$FILE_CONTEXTS" 2>/dev/null || \
-            echo "$line" >> "$FILE_CONTEXTS"
-    fi
 }
 
 
@@ -109,14 +101,13 @@ GENERATE_FS_CONFIG() {
     > "$FS_CONFIG"
 
     echo "/ 0 0 0755" >> "$FS_CONFIG"
+    echo "${IMG_NAME_BASE}/ 0 0 0755" >> "$FS_CONFIG"
 
     find "$SRC_MOUNT" -mindepth 1 -print0 | while IFS= read -r -d '' f; do
 
         rel="${f#$SRC_MOUNT}"
         rel="${rel#/}"
-
         path="${IMG_NAME_BASE}/${rel}"
-
         uid=$(stat -c %u "$f")
         gid=$(stat -c %g "$f")
         mode="0$(stat -c %a "$f")"
