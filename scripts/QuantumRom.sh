@@ -205,11 +205,8 @@ DOWNLOAD_FIRMWARE() {
     fi
 
     # --- Show Firmware Info ---
-    local file_size=$(du -m "${DOWN_DIR}/${MODEL}_*_fac.zip" | cut -f1)
+    local file_size=$(du -m "${DOWN_DIR}"/${MODEL}_*_fac.zip 2>/dev/null | cut -f1)
     echo -e "Firmware Size: ${file_size} MB"
-
-    # --- Cleanup ---
-    rm -f "$enc_file"
 }
 
 
@@ -239,6 +236,7 @@ EXTRACT_FIRMWARE() {
     rm -f "$FIRM_DIR"/BL_*.tar.md5
     rm -f "$FIRM_DIR"/CP_*.tar.md5
     rm -f "$FIRM_DIR"/HOME_CSC_*.tar.md5
+	rm -f "$FIRM_DIR"/USERDATA_*.tar.md5
 
     # ---- XZ ----
     for file in "$FIRM_DIR"/*.xz; do
@@ -273,11 +271,12 @@ EXTRACT_FIRMWARE() {
         esac
     done
 
-    # ---- REMOVE META-DATA ----
-    rm -rf "$FIRM_DIR/meta-data"
-
     # ---- REMOVE UNWANTED LZ4 FILES ----
-    rm -f \
+    rm -rf \
+        "$FIRM_DIR/meta-data" \
+        "$FIRM_DIR"/*.txt \
+        "$FIRM_DIR"/*.pit \
+        "$FIRM_DIR"/*.bin \
         "$FIRM_DIR"/cache.img.lz4 \
         "$FIRM_DIR"/dtbo.img.lz4 \
         "$FIRM_DIR"/efuse.img.lz4 \
@@ -322,11 +321,6 @@ EXTRACT_FIRMWARE() {
         rm -f "$file"
     done
 
-    # ---- REMOVE UNWANTED FILES ----
-    find "$FIRM_DIR" -maxdepth 1 -type f \
-        \( -name "*.txt" -o -name "*.pit" -o -name "*.bin" \) \
-        -delete
-
     echo -e "Firmware Extraction complete."
 }
 
@@ -362,10 +356,6 @@ EXTRACT_SUPER_IMG() {
 
 
 PREPARE_PARTITIONS() {
-	if [ -z "$STOCK_DEVICE" ] || [ "$STOCK_DEVICE" = "None" ]; then
-        export BUILD_PARTITIONS="odm,odm_dlkm,product,system,system_ext,system_dlkm,vendor,vendor_dlkm,odm_a,odm_dlkm_a,product_a,system_a,system_ext_a,system_dlkm_a,vendor_a,vendor_dlkm_a,optics,optics_a"
-    fi
-
     if [ "$#" -ne 1 ]; then
         echo -e "Usage: ${FUNCNAME[0]} <EXTRACTED_FIRM_DIR>"
         return 1
@@ -373,20 +363,36 @@ PREPARE_PARTITIONS() {
 
     local EXTRACTED_FIRM_DIR="$1"
 
-    [[ -z "$EXTRACTED_FIRM_DIR" || ! -d "$EXTRACTED_FIRM_DIR" ]] && {
-        echo -e "Invalid directory: $EXTRACTED_FIRM_DIR"
+    echo -e "${YELLOW}Preparing partitinos.${NC} $STOCK_DEVICE"
+	
+	if [ ! -d "$EXTRACTED_FIRM_DIR" ]; then
+        echo -e "${RED} Directory not found:${NC} $EXTRACTED_FIRM_DIR"
         return 1
-    }
+    fi
+
+    if [ -z "$STOCK_DEVICE" ] || [ "$STOCK_DEVICE" = "None" ]; then
+        export BUILD_PARTITIONS="odm,odm_dlkm,product,system,system_ext,system_dlkm,vendor,vendor_dlkm,odm_a,odm_dlkm_a,product_a,system_a,system_ext_a,system_dlkm_a,vendor_a,vendor_dlkm_a,optics,optics_a"
+    fi
+
+    if [ -n "$STOCK_DEVICE" ] && [ -f "$DEVICES_DIR/$STOCK_DEVICE/config" ]; then
+        export STOCK_HAS_AB_SLOT="$(grep -m1 '^STOCK_HAS_AB_SLOT=' "$DEVICES_DIR/$STOCK_DEVICE/config" | cut -d= -f2 | tr -d '\r')"
+    fi
+
+	# Delete empty b slot images
+    find "$EXTRACTED_FIRM_DIR" -type f -name '*_b.img' -size 0c -exec rm -rf {} +
+
+    for img in "$EXTRACTED_FIRM_DIR"/*_a.img; do
+        [ -f "$img" ] || continue
+
+        new="${img%_a.img}.img"
+        mv -f "$img" "$new"
+    done
 
     IFS=',' read -r -a KEEP <<< "$BUILD_PARTITIONS"
 
     for i in "${!KEEP[@]}"; do
         KEEP[$i]=$(echo -e "${KEEP[$i]}" | xargs)
     done
-
-    echo -e "${YELLOW}Preparing partitinos.${NC} $STOCK_DEVICE"
-
-    find "$EXTRACTED_FIRM_DIR" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 
     shopt -s nullglob dotglob
 
@@ -1582,11 +1588,7 @@ APPLY_STOCK_ROM_FLOATING_FEATURE() {
 
 
 APPLY_STOCK_CONFIG() {
-    echo -e ""
-	if [ -z "$STOCK_DEVICE" ] || [ "$STOCK_DEVICE" = "None" ]; then
-        echo -e "No target device is set. Just modifying ROM without any device config."
-        return 1
-    fi
+    echo " "
 
 	echo -e "${YELLOW}Applying $STOCK_DEVICE device config.${NC}"
     if [ "$#" -ne 1 ]; then
@@ -1596,23 +1598,43 @@ APPLY_STOCK_CONFIG() {
 
     local EXTRACTED_FIRM_DIR="$1"
 	local FLOATING_FEATURE_FILE_DIRECTORY="$EXTRACTED_FIRM_DIR/system/system/etc/floating_feature.xml"
+	
+	if [ -z "$STOCK_DEVICE" ] || [ "$STOCK_DEVICE" = "None" ]; then
+        echo -e "No target device is set. Just modifying ROM without any device config."
+        return 1
+    fi
 
     if [ ! -f "$DEVICES_DIR/$STOCK_DEVICE/config" ]; then
-        echo -e "- Config file for $STOCK_DEVICE not found in $DEVICES_DIR"
+        echo -e "Config file for $STOCK_DEVICE not found in $DEVICES_DIR"
+        return 1
+	fi
+
+    if [ ! -d "$EXTRACTED_FIRM_DIR/system/system" ]; then
+        echo -e "No usable extracted firmware found"
         return 1
 	fi
 
     if [ -f "$DEVICES_DIR/$STOCK_DEVICE/config" ]; then
-        echo -e "- $STOCK_DEVICE config found."
+        echo -e "$STOCK_DEVICE config found."
         export STOCK_VNDK_VERSION="$(grep -m1 '^STOCK_VNDK_VERSION=' "$DEVICES_DIR/$STOCK_DEVICE/config" | cut -d= -f2 | tr -d '\r')"
         export STOCK_HAS_SEPARATE_SYSTEM_EXT="$(grep -m1 '^STOCK_HAS_SEPARATE_SYSTEM_EXT=' "$DEVICES_DIR/$STOCK_DEVICE/config" | cut -d= -f2 | tr -d '\r')"
     	export STOCK_DVFS_FILENAME="$(grep -m1 '^STOCK_DVFS_FILENAME=' "$DEVICES_DIR/$STOCK_DEVICE/config" | cut -d= -f2 | tr -d '\r')"
+		export STOCK_DEVICE_CPU_ABILIST="$(grep -m1 '^STOCK_DEVICE_CPU_ABILIST=' "$DEVICES_DIR/$STOCK_DEVICE/config" | cut -d= -f2 | tr -d '\r')"
     fi
 
-	echo "- Stock device vndk version: $STOCK_VNDK_VERSION"
+	echo "Stock device vndk version: $STOCK_VNDK_VERSION"
     export STOCK_ROM_FLOATING_FEATURE="$DEVICES_DIR/$STOCK_DEVICE/floating_feature.xml"
 	export STOCK_SIOP_POLICY_FILENAME="$(awk -F'[<>]' '$2 == "SEC_FLOATING_FEATURE_SYSTEM_CONFIG_SIOP_POLICY_FILENAME" {print $3}' "$STOCK_ROM_FLOATING_FEATURE" | tr -d '\r' | xargs)"
 	export STOCK_DEVICE_TYPE="$(awk -F'[<>]' '$2 == "SEC_FLOATING_FEATURE_COMMON_CONFIG_DEVICE_MANUFACTURING_TYPE" {print $3}' "$STOCK_ROM_FLOATING_FEATURE")"
+
+	export TARGET_ROM_CPU_ABILIST="$(GET_PROP "$EXTRACTED_FIRM_DIR" "system" ro.system.product.cpu.abilist)"
+
+	if [ "$STOCK_DEVICE_CPU_ABILIST" != "$TARGET_ROM_CPU_ABILIST" ]; then
+        echo "CPU ABI MISMATCH!"
+        echo "STOCK DEVICE CPU ABI: $STOCK_DEVICE_CPU_ABILIST"
+        echo "TARGET ROM CPU ABI  : $TARGET_ROM_CPU_ABILIST"
+        exit 1
+    fi
 
 	# ADJUST SYSTEM_EXT PARTITION.
     ADJUST_SYSTEM_EXT "$EXTRACTED_FIRM_DIR"
@@ -1629,7 +1651,7 @@ APPLY_STOCK_CONFIG() {
     fi
 
     if [ "$STOCK_DEVICE_TYPE" = "jdm" ]; then
-	    echo -e "- Applying jdm device feature."
+	    echo -e "Applying jdm device feature."
 	    APPLY_JDM_SPECIAL "$EXTRACTED_FIRM_DIR"
     else
 	    rm -rf "$EXTRACTED_FIRM_DIR/system/system/cameradata/portrait_data"
@@ -1891,27 +1913,14 @@ DECODE_OMC() {
         return 1
     fi
 
-    echo -e "${YELLOW}Decoding CSC - odm,optics.${NC}"
+    echo -e "Decoding CSC - odm,optics."
 
     if ! command -v java >/dev/null 2>&1; then
-        echo -e "${RED}- Java is not installed.${NC}"
+        echo -e "Java is not installed."
         return 1
     fi
 
     local FW_DIR="$1"
-
-    if [ -d "${FW_DIR}/optics" ]; then
-        rm -rf "${WORK_DIR}/optics_decoded"
-
-        echo "Decoding optics."
-
-        java -jar "$omc_decoder" \
-            -i "${FW_DIR}/optics" \
-            -o "${WORK_DIR}/optics_decoded" \
-            >/dev/null 2>&1 || {
-                echo -e "${RED}Failed decoding optics.${NC}"
-            }
-    fi
 
     if [ -d "${FW_DIR}/odm/etc/omc" ]; then
         rm -rf "${WORK_DIR}/odm_decoded"
@@ -1922,8 +1931,25 @@ DECODE_OMC() {
             -i "${FW_DIR}/odm/etc/omc" \
             -o "${WORK_DIR}/odm_decoded" \
             >/dev/null 2>&1 || {
-                echo -e "${RED}Failed decoding odm/etc/omc.${NC}"
+                echo -e "Failed decoding odm/etc/omc."
             }
+	else
+	     echo "No odm found."
+    fi
+
+    if [ -d "${FW_DIR}/optics" ]; then
+        rm -rf "${WORK_DIR}/optics_decoded"
+
+        echo "Decoding optics."
+
+        java -jar "$omc_decoder" \
+            -i "${FW_DIR}/optics" \
+            -o "${WORK_DIR}/optics_decoded" \
+            >/dev/null 2>&1 || {
+                echo -e "Failed decoding optics."
+            }
+	else
+	     echo "No optics found."
     fi
 }
 
