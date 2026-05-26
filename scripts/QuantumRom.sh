@@ -167,7 +167,6 @@ DOWNLOAD_FIRMWARE() {
     local CSC="$2"
     local IMEI="$3"
     local DOWN_DIR="${4}/$MODEL"
-    local VERSION="${5:-}"
 
     rm -rf "$DOWN_DIR"
     mkdir -p "$DOWN_DIR"
@@ -176,11 +175,6 @@ DOWNLOAD_FIRMWARE() {
     echo -e "${YELLOW}  Samsung FW Downloader   ${NC}"
     echo -e "======================================"
     echo -e "MODEL: $MODEL | CSC: $CSC"
-
-    # --- Step 1: Determine Version ---
-    if [ -n "$VERSION" ]; then
-        echo -e "✅ Downloading provided version: $VERSION"
-    fi
 
     VERSION=$(python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" checkupdate 2>&1)
 
@@ -518,6 +512,12 @@ EXTRACT_FIRMWARE_IMG() {
 
     chown -R "$REAL_USER:$REAL_USER" "$FIRM_DIR"
     chmod -R u+rwX "$FIRM_DIR"
+
+	if [ -n "$GITHUB_ENV" ]; then
+        echo "ANDROID_VERSION=$(GET_PROP "$EXTRACTED_FIRM_DIR" "system" ro.system.build.version.release)" >> "$GITHUB_ENV"
+        echo "ONE_UI_VERSION=$(GET_PROP "$EXTRACTED_FIRM_DIR" "system" ro.build.version.oneui)" >> "$GITHUB_ENV"
+        echo "CPU_ABILIST=$(GET_PROP "$EXTRACTED_FIRM_DIR" "system" ro.system.product.cpu.abilist)" >> "$GITHUB_ENV"
+    fi
 }
 
 
@@ -1243,20 +1243,20 @@ ADJUST_SYSTEM_EXT() {
     if [ "$STOCK_HAS_SEPARATE_SYSTEM_EXT" = "FALSE" ]; then
         echo "- STOCK_HAS_SEPARATE_SYSTEM_EXT: $STOCK_HAS_SEPARATE_SYSTEM_EXT"
 
-        if [ -d "$EXTRACTED_FIRM_DIR/system/system/system_ext/apex" ]; then
+        if [ -d "$EXTRACTED_FIRM_DIR/system/system/system_ext/etc" ]; then
             export TARGET_ROM_SYSTEM_EXT_DIR="$EXTRACTED_FIRM_DIR/system/system/system_ext"
 
-        elif [ -d "$EXTRACTED_FIRM_DIR/system/system_ext/apex" ]; then
+        elif [ -d "$EXTRACTED_FIRM_DIR/system/system_ext/etc" ]; then
             export TARGET_ROM_SYSTEM_EXT_DIR="$EXTRACTED_FIRM_DIR/system/system_ext"
 			
-		elif [ -d "$EXTRACTED_FIRM_DIR/system_ext/apex" ]; then
+		elif [ -d "$EXTRACTED_FIRM_DIR/system_ext/etc" ]; then
 		    ADD_SYSTEM_EXT_IN_SYSTEM_ROOT "$EXTRACTED_FIRM_DIR"
         fi
 
 	elif [ "$STOCK_HAS_SEPARATE_SYSTEM_EXT" = "TRUE" ]; then
         echo "STOCK_HAS_SEPARATE_SYSTEM_EXT: $STOCK_HAS_SEPARATE_SYSTEM_EXT"
 
-        if [ -d "$EXTRACTED_FIRM_DIR/system/system/system_ext/apex" ]; then
+        if [ -d "$EXTRACTED_FIRM_DIR/system/system/system_ext/etc" ]; then
             SEPARATE_SYSTEM_EXT "$EXTRACTED_FIRM_DIR"
         fi
     fi
@@ -1279,11 +1279,11 @@ PATCH_SELINUX() {
 
 	UNSUPPORTED_SELINUX=("audiomirroring" "fabriccrypto" "hal_dsms_default" "qb_id_prop" "hal_dsms_service" "proc_compaction_proactiveness" "sbauth" "ker_app" "kpp_app" "kpp_data" "attiqi_app" "kpoc_charger" "sec_diag")
 
-	if [ -d "$EXTRACTED_FIRM_DIR/system_ext/apex" ]; then
+	if [ -d "$EXTRACTED_FIRM_DIR/system_ext/etc" ]; then
         export TARGET_ROM_SYSTEM_EXT_DIR="$EXTRACTED_FIRM_DIR/system_ext"
-	elif [ -d "$EXTRACTED_FIRM_DIR/system/system_ext/apex" ]; then
+	elif [ -d "$EXTRACTED_FIRM_DIR/system/system_ext/etc" ]; then
         export TARGET_ROM_SYSTEM_EXT_DIR="$EXTRACTED_FIRM_DIR/system/system_ext"
-    elif [ -d "$EXTRACTED_FIRM_DIR/system/system/system_ext/apex" ]; then
+    elif [ -d "$EXTRACTED_FIRM_DIR/system/system/system_ext/etc" ]; then
             export TARGET_ROM_SYSTEM_EXT_DIR="$EXTRACTED_FIRM_DIR/system/system/system_ext"
     fi
 
