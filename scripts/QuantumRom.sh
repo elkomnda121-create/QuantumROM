@@ -342,10 +342,10 @@ EXTRACT_SUPER_IMG() {
         "$lpunpack" "$FIRM_DIR/super.img" "$FIRM_DIR" || return 1
         rm -f "$FIRM_DIR/super.img"
 
-        echo -e "super.img extraction complete"
+        echo -e "- super.img extraction complete"
 
     else
-        echo -e "No super.img found."
+        echo -e "- No super.img found."
     fi
 }
 
@@ -674,10 +674,10 @@ REPLACE_SMALI_METHOD() {
     local NEW_BODY=$(echo -e "$3" | tail -n +2)
 
     echo -e "- Patching: $FILE"
-    echo -e "- Method: $METHOD_NAME"
+    echo -e "  Method: $METHOD_NAME"
 
     if ! grep -Fq "$METHOD_NAME" "$FILE"; then
-        echo -e "- Method not found → Skipped"
+        echo -e "- Warning- Method: $METHOD_NAME not found in: $FILE"
         return 0
     fi
 
@@ -744,14 +744,16 @@ PATCH_FLAG_SECURE() {
     fi
 
 	echo -e "Patching flag secure."
+
+	# https://github.com/ShaDisNX255/NcX_Stock/commit/c2cc85818df4fe040b4f89ca8f9b78e939b211b4
+    # https://forum.xda-developers.com/t/mods-samsung-not-android-mods-collection-exynos.3772017/post-86811691
     #
 	# For android 13
 	# local FILE="${1}/smali_classes3/com/android/server/wm/WindowState.smali"
 	# local METHOD_NAME_1=".method public isSecureLocked()Z"
 	# Only one method.
+    #
 
-    # https://github.com/ShaDisNX255/NcX_Stock/commit/c2cc85818df4fe040b4f89ca8f9b78e939b211b4
-    # https://forum.xda-developers.com/t/mods-samsung-not-android-mods-collection-exynos.3772017/post-86811691
 	local FILE_1="${1}/smali_classes2/com/android/server/wm/WindowState.smali"
     local METHOD_NAME_1=".method public final isSecureLocked()Z"
     local REPLACE_BODY_1='
@@ -762,7 +764,7 @@ PATCH_FLAG_SECURE() {
     return v0
     '
     REPLACE_SMALI_METHOD "$FILE_1" "$METHOD_NAME_1" "$REPLACE_BODY_1"
-  
+
 	local FILE_2="${1}/smali_classes2/com/android/server/wm/WindowManagerService.smali"
     local METHOD_NAME_2=".method public final notifyScreenshotListeners(I)Ljava/util/List;"
     local REPLACE_BODY_2='
@@ -818,6 +820,13 @@ PATCH_SECURE_FOLDER() {
     echo -e "Patching secure folder."
 
 	#https://forum.xda-developers.com/t/mods-samsung-not-android-mods-collection-exynos.3772017/post-86770885
+    #
+	# For android 13
+	# local FILE_1="${1}/smali_classes2/com/android/server/knox/dar/DarManagerService.smali"
+	# local METHOD_NAME_2=".method public isDeviceRootKeyInstalled()Z"
+	# local METHOD_NAME_3=".method public isKnoxKeyInstallable()Z"
+    #
+
 	local FILE_1="${1}/smali/com/android/server/knox/dar/DarManagerService.smali"
 	local METHOD_NAME_1=".method public final checkDeviceIntegrity([Ljava/security/cert/Certificate;)Z"
 	local METHOD_NAME_2=".method public final isDeviceRootKeyInstalled()Z"
@@ -836,6 +845,7 @@ PATCH_SECURE_FOLDER() {
 	REPLACE_SMALI_METHOD "$FILE_1" "$METHOD_NAME_3" "$REPLACE_BODY_1"
 
     local FILE_2="${1}/smali/com/android/server/StorageManagerService.smali"
+	# METHOD_NAME_4 Is not available in Android 13
     local METHOD_NAME_4=".method public static isRootedDevice()Z"
     local REPLACE_BODY_2='
     .locals 1
@@ -1010,8 +1020,7 @@ PATCH_BT_LIB() {
     fi
 
     7z e "${EXTRACTED_FIRM_DIR}/system/system/apex/com.android.bt"*.apex \
-        "apex_payload.img" \
-        -o"$WORK_DIR" -y >/dev/null
+        "apex_payload.img" -o"$WORK_DIR" -y >/dev/null
 
 	debugfs -R "dump /lib64/libbluetooth_jni.so $WORK_DIR/libbluetooth_jni.so" \
         "$WORK_DIR/apex_payload.img" >/dev/null
@@ -1690,7 +1699,7 @@ FIX_CAMERA() {
     if [ "$STOCK_DEVICE_CHIPSET" = "MediaTek" ] && [ "$BUILD_BRAND" != "MTK" ]; then
         echo "- Adding mediatek camera related files."
 
-        if [ -f "$(pwd)/QuantumROM/Mods/Apps/MTK_Camera_Files_Android_${ANDROID_VERSION}.zip" ]; then
+        if [ ! -f "$(pwd)/QuantumROM/Mods/Apps/MTK_Camera_Files_Android_${ANDROID_VERSION}.zip" ]; then
             if curl -fsSL --connect-timeout 5 https://www.google.com >/dev/null; then
                 wget --no-check-certificate \
                     "https://github.com/SN-Abdullah-Al-Noman/Samsung_Special/releases/download/Android_${ANDROID_VERSION}/MTK_Camera_Files_Android_${ANDROID_VERSION}.zip" \
@@ -1797,7 +1806,6 @@ APPLY_STOCK_CONFIG() {
     fi
 
     if [ "$STOCK_DEVICE_TYPE" = "jdm" ]; then
-	    echo -e "Applying jdm device feature."
 	    APPLY_JDM_SPECIAL "$EXTRACTED_FIRM_DIR"
     else
 	    rm -rf "${EXTRACTED_FIRM_DIR}/system/system/cameradata/portrait_data"
@@ -1807,9 +1815,11 @@ APPLY_STOCK_CONFIG() {
 	find "${EXTRACTED_FIRM_DIR}/system/system/media" -maxdepth 1 -type f \( -iname "*.spi" -o -iname "*.qmg" -o -iname "*.txt" \) -delete
 	rm -rf "$EXTRACTED_FIRM_DIR"/product/overlay/framework-res*auto_generated_rro_product.apk
 	rm -rf ${EXTRACTED_FIRM_DIR}/product/overlay/SystemUI*auto_generated_rro_product.apk
+
 	cp -a "${DEVICES_DIR}/$STOCK_DEVICE/Stock/." "${EXTRACTED_FIRM_DIR}/"
-    if [ -d "${DEVICES_DIR}/$STOCK_DEVICE/extra" ]; then
-        cp -af "${DEVICES_DIR}/$STOCK_DEVICE/extra/." "$(pwd)/OUT"
+
+    if [ -d "${DEVICES_DIR}/${STOCK_DEVICE}/extra" ]; then
+        cp -af "${DEVICES_DIR}/${STOCK_DEVICE}/extra/." "$(pwd)/OUT"
     fi
 
 	BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "ro.product.system.model" "$STOCK_DEVICE"
@@ -1928,14 +1938,38 @@ DISABLE_SECURITY() {
 
 
 APPLY_JDM_SPECIAL() {
+    echo " "
+
     if [ "$#" -ne 1 ]; then
         echo -e "Usage: ${FUNCNAME[0]} <EXTRACTED_FIRM_DIR>"
         return 1
     fi
 
+	echo -e "Applying jdm device feature."
+
 	local EXTRACTED_FIRM_DIR="$1"
-	rm -rf "${EXTRACTED_FIRM_DIR}/system/system/priv-app/SamSungCamera"
-    cp -rfa "$(pwd)/QuantumROM/Mods/Apps/JDM_Special/SamSungCamera/." "${EXTRACTED_FIRM_DIR}/"
+	local ANDROID_VERSION=$(GET_PROP "$EXTRACTED_FIRM_DIR" "system" "ro.system.build.version.release")
+
+	rm -rf "${EXTRACTED_FIRM_DIR}/system/system/priv-app/SamsungCamera"
+
+	if [ ! -f "$(pwd)/QuantumROM/Mods/Apps/JDM_Camera_Files_Android_${ANDROID_VERSION}.zip" ]; then
+		if curl -fsSL --connect-timeout 5 https://www.google.com >/dev/null; then
+            wget --no-check-certificate \
+                "https://github.com/SN-Abdullah-Al-Noman/Samsung_Special/releases/download/Android_${ANDROID_VERSION}/JDM_Camera_Files_Android_${ANDROID_VERSION}.zip" \
+                -O "$(pwd)/QuantumROM/Mods/Apps/JDM_Camera_Files_Android_${ANDROID_VERSION}.zip"
+        else
+            echo "- No internet connection available. Unable to download: Samsung_OCRDataProvider_Android_${ANDROID_VERSION}.zip"
+            return 1
+        fi
+    fi
+
+    if [ -f "$(pwd)/QuantumROM/Mods/Apps/JDM_Camera_Files_Android_${ANDROID_VERSION}.zip" ]; then
+        rm -rf "$(pwd)/QuantumROM/Mods/Apps/JDM_Camera_Files_Android_${ANDROID_VERSION}"
+        unzip -o "$(pwd)/QuantumROM/Mods/Apps/JDM_Camera_Files_Android_${ANDROID_VERSION}.zip" \
+            -d "$(pwd)/QuantumROM/Mods/Apps/JDM_Camera_Files_Android_${ANDROID_VERSION}" >/dev/null 2>&1
+
+        cp -rfa "$(pwd)/QuantumROM/Mods/Apps/JDM_Camera_Files_Android_${ANDROID_VERSION}/." "${EXTRACTED_FIRM_DIR}/"
+    fi
 }
 
 
@@ -1968,7 +2002,7 @@ ADD_SAMSUNG_FLAGSHIP_APPS() {
     echo "- Adding China smart manager."
 	
 	if [ ! -d "${EXTRACTED_FIRM_DIR}/system/system/priv-app/SmartManagerCN" ] && \
-        [ -f "$(pwd)/QuantumROM/Mods/Apps/Samsung_SmartManagerCN_Android_${ANDROID_VERSION}.zip" ]; then
+        [ ! -f "$(pwd)/QuantumROM/Mods/Apps/Samsung_SmartManagerCN_Android_${ANDROID_VERSION}.zip" ]; then
 
         if curl -fsSL --connect-timeout 5 https://www.google.com >/dev/null; then
             wget --no-check-certificate \
@@ -2003,7 +2037,7 @@ ADD_SAMSUNG_FLAGSHIP_APPS() {
     echo "- Adding Photo editor ai full."
 	
 	if [ ! -d "${EXTRACTED_FIRM_DIR}/system/system/priv-app/PhotoEditor_AIFull" ] && \
-        [ -f "$(pwd)/QuantumROM/Mods/Apps/Samsung_PhotoEditor_AIFull_Android_${ANDROID_VERSION}.zip" ]; then
+        [ ! -f "$(pwd)/QuantumROM/Mods/Apps/Samsung_PhotoEditor_AIFull_Android_${ANDROID_VERSION}.zip" ]; then
 
         if curl -fsSL --connect-timeout 5 https://www.google.com >/dev/null; then
             wget --no-check-certificate \
@@ -2045,7 +2079,7 @@ ADD_SAMSUNG_FLAGSHIP_APPS() {
     echo "- Adding Samsung OCR Data Provider."
 
     if [ ! -d "${EXTRACTED_FIRM_DIR}/system/system/app/OCRDataProvider" ] && \
-        [ -f "$(pwd)/QuantumROM/Mods/Apps/Samsung_OCRDataProvider_Android_${ANDROID_VERSION}.zip" ]; then
+        [ ! -f "$(pwd)/QuantumROM/Mods/Apps/Samsung_OCRDataProvider_Android_${ANDROID_VERSION}.zip" ]; then
 
 		if curl -fsSL --connect-timeout 5 https://www.google.com >/dev/null; then
             wget --no-check-certificate \
@@ -2158,7 +2192,7 @@ DECODE_OMC() {
     echo -e "Decoding CSC - odm,optics."
 
     if ! command -v java >/dev/null 2>&1; then
-        echo -e "Java is not installed."
+        echo -e "- Java is not installed."
         return 1
     fi
 
@@ -2174,10 +2208,10 @@ DECODE_OMC() {
             -i "${FW_DIR}/odm/etc/omc" \
             -o "${OUT_DIR}/odm_decoded" \
             >/dev/null 2>&1 || {
-                echo -e "Failed decoding odm/etc/omc."
+                echo -e "- Failed decoding odm/etc/omc."
             }
 	else
-	     echo "No odm found."
+	     echo "- No odm found."
     fi
 
     if [ -d "${FW_DIR}/optics" ]; then
@@ -2189,10 +2223,10 @@ DECODE_OMC() {
             -i "${FW_DIR}/optics" \
             -o "${OUT_DIR}/optics_decoded" \
             >/dev/null 2>&1 || {
-                echo -e "Failed decoding optics."
+                echo -e "- Failed decoding optics."
             }
 	else
-	     echo "No optics found."
+	     echo "- No optics found."
     fi
 }
 
