@@ -443,8 +443,6 @@ EXTRACT_FIRMWARE_IMG() {
         local partition="$(basename "${imgfile%.img}")"
         local ORG_IMG_SIZE=$(stat -c%s -- "$imgfile")
 
-        rm -rf "${EXTRACTED_FIRM_DIR}/$partition"
-
         local fstype=$(DETECT_FILESYSTEM "$imgfile")
         if [ "$fstype" = "sparse" ]; then
             echo -e "$partition.img is SPARSE. Converting to raw img."
@@ -471,12 +469,14 @@ EXTRACT_FIRMWARE_IMG() {
             ext4)
                 echo " "
                 echo -e "$partition.img Detected ext4. Size: $ORG_IMG_SIZE bytes. Extracting..."
+				rm -rf "${EXTRACTED_FIRM_DIR}/$partition"
                 python3 "$imgextractor_py" "$imgfile" "$EXTRACTED_FIRM_DIR"
                 ;;
 
             erofs)
                 echo " "
                 echo -e "$partition.img Detected erofs. Size: $ORG_IMG_SIZE bytes. Extracting..."
+				rm -rf "${EXTRACTED_FIRM_DIR}/$partition"
                 "$extract_erofs" -i "$imgfile" -x -f -o "$EXTRACTED_FIRM_DIR" >/dev/null 2>&1
                 ;;
 
@@ -975,27 +975,41 @@ PATCH_SSRM() {
     echo -e "Patching SSRM."
     echo -e "- Patching: $FILE"
 
-    if [ ! -f "$FILE" ]; then
-        echo -e "- File not found! Skipping..."
-        return 1
+	if [ ! -f "$FILE" ]; then
+	    echo "- File name not found: $FILE"
+		return
+	fi
+
+    if FOUND=$(grep -E 'const-string v0, "dvfs_policy_.*_xx"' "$FILE"); then
+        echo "- Found DVFS policy: $FOUND"
+
+        if [ -n "$STOCK_DVFS_FILENAME" ]; then
+            sed -i -E \
+            's|const-string v0, "dvfs_policy_.*_xx"|const-string v0, "'"$STOCK_DVFS_FILENAME"'"|' \
+            "$FILE"
+
+            echo "- DVFS policy file name replaced to: ${STOCK_DVFS_FILENAME}"
+        else
+            echo "- STOCK_DVFS_FILENAME is empty. Skipping replacement."
+        fi
+    else
+        echo "- DVFS policy file name not found."
     fi
 
-    if grep -Eq 'const-string v[0-9]+, "siop_' "$FILE"; then
-        echo -e "- Found siop_ → Replacing"
-        sed -i 's/\(const-string v[0-9]\+,\s*"\)siop_[^"]*"/\1'"$STOCK_SIOP_POLICY_FILENAME"'"/g' "$FILE"
+    if FOUND=$(grep -E 'const-string v6, "siop_.*_.*"' "$FILE"); then
+        echo "- Found SIOP policy: $FOUND"
+
+        if [ -n "$STOCK_SIOP_POLICY_FILENAME" ]; then
+            sed -i -E \
+            's|const-string v6, "siop_.*_.*"|const-string v6, "'"$STOCK_SIOP_POLICY_FILENAME"'"|' \
+            "$FILE"
+
+            echo "- SIOP policy file name replaced to: ${STOCK_SIOP_POLICY_FILENAME}"
+        else
+            echo "- STOCK_SIOP_POLICY_FILENAME is empty. Skipping replacement."
+        fi
     else
-        echo -e "- siop filename not found → Skipped"
-    fi
-
-    if grep -Eq 'const-string v[0-9]+, "dvfs_policy_[^"]*_[^"]*"' "$FILE"; then
-        echo -e "- Found dvfs_policy_*_* → Replacing"
-
-        sed -i '/dvfs_policy_default/! {
-            s/\(const-string v[0-9]\+,\s*"\)dvfs_policy_[^"]*_[^"]*"/\1'"$STOCK_DVFS_FILENAME"'"/g
-        }' "$FILE"
-
-    else
-        echo -e "- dvfs_policy file name not found → Skipped"
+        echo "- SIOP policy file name not found."
     fi
 }
 
@@ -1444,15 +1458,6 @@ APPLY_CUSTOM_FLOATING_FEATURE() {
 
     #========== CAMERA ==========#
     UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_CAMERA_SUPPORT_PRIVACY_TOGGLE" "TRUE"
-
-    #========== GENAI ==========#
-    UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_IMAGE_CLIPPER" "TRUE"
-    UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_OBJECT_ERASER" "TRUE"
-    UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_REFLECTION_ERASER" "TRUE"
-    UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_SHADOW_ERASER" "TRUE"
-    UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_SMART_LASSO" "TRUE"
-    UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_SPOT_FIXER" "TRUE"
-    UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_STYLE_TRANSFER" "TRUE"
 }
 
 
@@ -2066,6 +2071,15 @@ ADD_SAMSUNG_FLAGSHIP_APPS() {
         rm -rf "${EXTRACTED_FIRM_DIR}/system/system/etc/style_transfer"
         rm -rf "${EXTRACTED_FIRM_DIR}/system/system/priv-app"/PhotoEditor_*
 
+	    #========== GENAI ==========#
+        UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_IMAGE_CLIPPER" "TRUE"
+        UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_OBJECT_ERASER" "TRUE"
+        UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_REFLECTION_ERASER" "TRUE"
+        UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_SHADOW_ERASER" "TRUE"
+        UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_SMART_LASSO" "TRUE"
+        UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_SPOT_FIXER" "TRUE"
+        UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_GENAI_SUPPORT_STYLE_TRANSFER" "TRUE"
+
         cp -rfa "$(pwd)/QuantumROM/Mods/Apps/Samsung_PhotoEditor_AIFull_Android_${ANDROID_VERSION}/." "${EXTRACTED_FIRM_DIR}/"
     fi
 
@@ -2168,7 +2182,7 @@ APPLY_CUSTOM_FEATURES() {
 
     # Apply custom floating feature.
 	APPLY_CUSTOM_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY"
-	
+
 	# Fix samsung device health manager service
 	UPDATE_SDHMS "$EXTRACTED_FIRM_DIR"
 
