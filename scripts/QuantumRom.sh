@@ -1417,10 +1417,6 @@ APPLY_CUSTOM_FLOATING_FEATURE() {
     sed -i '/SEC_FLOATING_FEATURE_COMMON_DISABLE_NATIVE_AI/d' "$FLOATING_FEATURE_FILE_DIRECTORY"
     UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_VISION_SUPPORT_AI_MY_FAVORITE_CONTENTS" "TRUE"
 
-	#============= OCR ==========#
-    sed -i '/SEC_FLOATING_FEATURE_CAMERA_CONFIG_OCR_ENGINE_UNSUPPORT /d' "$FLOATING_FEATURE_FILE_DIRECTORY"
-    UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_CAMERA_CONFIG_STRIDE_OCR_VERSION" "V2"
-
 	#========== EDGE ==========#
     UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_COMMON_CONFIG_EDGE" "panel"
     UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_SYSTEMUI_SUPPORT_BRIEF_NOTIFICATION" "TRUE"
@@ -2112,6 +2108,10 @@ ADD_SAMSUNG_FLAGSHIP_APPS() {
         unzip -o "$(pwd)/QuantumROM/Mods/Apps/Samsung_OCRDataProvider_Android_${ANDROID_VERSION}.zip" \
             -d "$(pwd)/QuantumROM/Mods/Apps/Samsung_OCRDataProvider_Android_${ANDROID_VERSION}" >/dev/null 2>&1
 
+	    #============= OCR ==========#
+        sed -i '/SEC_FLOATING_FEATURE_CAMERA_CONFIG_OCR_ENGINE_UNSUPPORT /d' "$FLOATING_FEATURE_FILE_DIRECTORY"
+        UPDATE_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY" "SEC_FLOATING_FEATURE_CAMERA_CONFIG_STRIDE_OCR_VERSION" "V2"
+
         cp -rfa "$(pwd)/QuantumROM/Mods/Apps/Samsung_OCRDataProvider_Android_${ANDROID_VERSION}/." "${EXTRACTED_FIRM_DIR}/"
 
 		if [ ! -d "${EXTRACTED_FIRM_DIR}/system/system/app/OCRDataProvider" ]; then
@@ -2173,12 +2173,8 @@ APPLY_CUSTOM_FEATURES() {
     BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "debug.hwui.renderer" "skiavk"
 	BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "ro.telephony.sim_slots.count" "2"
 	BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "ro.surface_flinger.protected_contents" "true"
-	BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "ro.config.dmverity" "false"
-	BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "ro.config.iccc_version" "iccc_disabled"
 
 	BUILD_PROP "$EXTRACTED_FIRM_DIR" "product" "ro.product.locale" "en-US"
-	BUILD_PROP "$EXTRACTED_FIRM_DIR" "product" "ro.config.dmverity" "false"
-	BUILD_PROP "$EXTRACTED_FIRM_DIR" "product" "ro.config.iccc_version" "iccc_disabled"
 
     # Apply custom floating feature.
 	APPLY_CUSTOM_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY"
