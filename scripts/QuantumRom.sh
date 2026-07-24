@@ -1798,6 +1798,9 @@ APPLY_STOCK_CONFIG() {
 	# FIX CAMERA IF NEED
 	FIX_CAMERA "$EXTRACTED_FIRM_DIR"
 
+	# Fix samsung device health manager service
+	UPDATE_SDHMS "$EXTRACTED_FIRM_DIR"
+
     # Apply stock floating feature.
 	APPLY_STOCK_ROM_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY"
 
@@ -2163,24 +2166,18 @@ APPLY_CUSTOM_FEATURES() {
     fi
 
     echo -e "Applying usefull features."
-
 	echo -e "- Adding build prop tweak."
 	BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "ro.product.locale" "en-US"
     BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "fw.max_users" "5"
     BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "fw.show_multiuserui" "1"
     BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "wifi.interface=" "wlan0"
     BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "wlan.wfd.hdcp" "disabled"
-    BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "debug.hwui.renderer" "skiavk"
 	BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "ro.telephony.sim_slots.count" "2"
 	BUILD_PROP "$EXTRACTED_FIRM_DIR" "system" "ro.surface_flinger.protected_contents" "true"
-
 	BUILD_PROP "$EXTRACTED_FIRM_DIR" "product" "ro.product.locale" "en-US"
 
     # Apply custom floating feature.
 	APPLY_CUSTOM_FLOATING_FEATURE "$FLOATING_FEATURE_FILE_DIRECTORY"
-
-	# Fix samsung device health manager service
-	UPDATE_SDHMS "$EXTRACTED_FIRM_DIR"
 
 	chown -R "$REAL_USER:$REAL_USER" "$EXTRACTED_FIRM_DIR"
     chmod -R u+rwX "$EXTRACTED_FIRM_DIR"
